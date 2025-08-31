@@ -267,7 +267,6 @@
 
 // export default HandSignRecognition;
 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Square, Play, Pause, Volume2, XCircle } from 'lucide-react'; 
 
@@ -319,7 +318,7 @@ const HandSignRecognition = () => {
   const intervalRef = useRef(null);
   const demoIntervalRef = useRef(null);
 
-  // Hardcoded sentence for demonstration
+  // You can change the sentence here for your demonstration
   const demoSentence = "Hello world This is a demo sentence".split(' ');
   const [demoIndex, setDemoIndex] = useState(0);
 
