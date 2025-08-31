@@ -319,7 +319,7 @@ const HandSignRecognition = () => {
   const demoIntervalRef = useRef(null);
 
   // You can change the sentence here for your demonstration
-  const demoSentence = "Hello world This is a demo sentence".split(' ');
+  const demoSentence = "Hello Murf We are team flagbit".split(' ');
   const [demoIndex, setDemoIndex] = useState(0);
 
   const languages = [
