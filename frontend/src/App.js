@@ -383,7 +383,7 @@ const HandSignRecognition = () => {
       processCharacter(); // Start processing characters for the current word
     };
     
-    processWord(); // Start processing the first word
+    setTimeout(processWord, 2000); // Start processing the first word
   }, []);
 
   // Stops the text simulation by clearing any scheduled actions
