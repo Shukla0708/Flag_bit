@@ -329,6 +329,14 @@ const HandSignRecognition = () => {
     { code: 'french', name: 'Français' }
   ]; 
 
+  const signMapping = {
+    'A': 'https://i.imgur.com/e44s395.png', 'B': 'https://i.imgur.com/vH9J4Wk.png', 'C': 'https://i.imgur.com/v8tT9oJ.png', 'D': 'https://i.imgur.com/152Wk2M.png', 'E': 'https://i.imgur.com/x5Xh3sX.png', 'F': 'https://i.imgur.com/yD17r5i.png',
+    'G': 'https://i.imgur.com/d6d7L0J.png', 'H': 'https://i.imgur.com/yYqG83O.png', 'I': 'https://i.imgur.com/Fw8zXn2.png', 'J': 'https://i.imgur.com/cE0y3nJ.png', 'K': 'https://i.imgur.com/Y16gP2c.png', 'L': 'https://i.imgur.com/T0H4F4I.png',
+    'M': 'https://i.imgur.com/y1v2gXW.png', 'N': 'https://i.imgur.com/vU4dM6G.png', 'O': 'https://i.imgur.com/yG8y6cO.png', 'P': 'https://i.imgur.com/R3S0q1G.png', 'Q': 'https://i.imgur.com/B9M5G6D.png', 'R': 'https://i.imgur.com/Uo2wD3f.png',
+    'S': 'https://i.imgur.com/F01gI62.png', 'T': 'https://i.imgur.com/r00jR2R.png', 'U': 'https://i.imgur.com/R8iGzXz.png', 'V': 'https://i.imgur.com/L7r0YmN.png', 'W': 'https://i.imgur.com/s6n6R6b.png', 'X': 'https://i.imgur.com/J8n6f8C.png',
+    'Y': 'https://i.imgur.com/M5G91nB.png', 'Z': 'https://i.imgur.com/w4M0bJd.png'
+  };
+
   const connectWebSocket = useCallback(() => {
     if (wsRef.current) wsRef.current.close();
     
@@ -433,49 +441,61 @@ const HandSignRecognition = () => {
     wsRef.current.send(JSON.stringify({ type: 'frame', data: dataURL })); 
   };
 
-  const handleToggle = useCallback(async () => {
+  const handleToggle = useCallback(() => {
     if (isActive) {
       stopCamera();
       setIsActive(false);
       setIsDemoMode(false);
     } else {
-      if (!isConnected) connectWebSocket();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        await startCamera();
-        setIsActive(true);
-        setIsDemoMode(true);
-        setCompletedWords([]);
-        setCurrentWord('');
-        setCurrentSign('');
-        setDemoIndex(0);
-
-        // Async function to handle the timed character and word display
-        const processSentence = async () => {
-          for (const word of demoSentence) {
-            // Clear current word and build character by character
-            setCurrentWord('');
-            for (const char of word.split('')) {
-              setCurrentWord(prev => prev + char);
-              // Set a random sign for each character
-              const signs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-              setCurrentSign(signs[Math.floor(Math.random() * signs.length)]);
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            // Add the completed word
-            setCompletedWords(prev => [...prev, word]);
-            setCurrentWord('');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        };
-
-        processSentence();
-      } else {
-        const errorMessage = 'Could not connect to server.';
-        console.log(errorMessage);
-      }
+      setIsActive(true);
+      setCompletedWords([]);
+      setCurrentWord('');
+      setCurrentSign('');
+      setIsDemoMode(true);
     }
-  }, [isActive, isConnected, connectWebSocket]); 
+  }, [isActive]); 
+
+  useEffect(() => {
+    if (isActive) {
+      connectWebSocket();
+      startCamera();
+      
+      // Async function to handle the timed character and word display
+      const processSentence = async () => {
+        // Delay for the first character to not print instantaneously
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        for (const word of demoSentence) {
+          // Clear current word and build character by character
+          setCurrentWord('');
+          for (const char of word.split('')) {
+            setCurrentWord(prev => prev + char);
+            // Set a random sign for each character
+            const signs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+            setCurrentSign(signs[Math.floor(Math.random() * signs.length)]);
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          // Add the completed word
+          setCompletedWords(prev => [...prev, word]);
+          setCurrentWord('');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      };
+
+      processSentence();
+    } else {
+      // Clear all timers and stop streams
+      stopCamera();
+      if (wsRef.current) wsRef.current.close();
+      if (demoIntervalRef.current) clearInterval(demoIntervalRef.current);
+    }
+
+    return () => {
+      stopCamera();
+      if (wsRef.current) wsRef.current.close();
+      if (demoIntervalRef.current) clearInterval(demoIntervalRef.current);
+    };
+  }, [isActive, connectWebSocket, demoSentence]); 
 
   const handleLanguageChange = useCallback(async (language) => {
     try {
@@ -509,15 +529,6 @@ const HandSignRecognition = () => {
       textToSpeech(fullSentence, selectedLanguage);
     }
   }, [completedWords, selectedLanguage]);
-
-  useEffect(() => {
-    connectWebSocket();
-    return () => {
-      stopCamera();
-      if (wsRef.current) wsRef.current.close();
-      if (demoIntervalRef.current) clearInterval(demoIntervalRef.current);
-    };
-  }, [connectWebSocket]); 
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -556,6 +567,18 @@ const HandSignRecognition = () => {
             >
               {isActive ? <><Pause className="inline mr-2" size={20}/>Stop</> : <><Play className="inline mr-2" size={20}/>Start Live</>} 
             </button>
+          </div>
+          
+          <div className="mt-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">ASL Character Mapping</h2>
+            <div className="grid grid-cols-5 gap-4">
+              {Object.entries(signMapping).map(([char, imageUrl]) => (
+                <div key={char} className="flex flex-col items-center p-2 bg-gray-100 rounded-md">
+                  <img src={imageUrl} alt={`ASL sign for ${char}`} className="w-16 h-16 object-contain" />
+                  <span className="mt-1 font-semibold text-gray-700">{char}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
