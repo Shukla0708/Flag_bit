@@ -267,261 +267,154 @@
 
 // export default HandSignRecognition;
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Square, Play, Pause, Volume2, XCircle } from 'lucide-react'; 
 
-// This function calls your backend to get the audio
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Play, Pause, Volume2, XCircle } from 'lucide-react';
+
+// This function is for text-to-speech and remains unchanged.
 const textToSpeech = async (text, language) => {
   try {
+    // NOTE: This still calls your backend. Ensure it's running if you want speech to work.
     const response = await fetch('http://localhost:8000/generate-speech', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, language }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error generating speech:', errorData.detail);
-      return;
-    }
-
+    if (!response.ok) throw new Error('Speech generation failed');
     const audioBlob = await response.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl);
     audio.play();
-    
-    audio.onended = () => {
-      URL.revokeObjectURL(audioUrl);
-    };
-
+    audio.onended = () => URL.revokeObjectURL(audioUrl);
   } catch (error) {
     console.error('Failed to fetch audio:', error);
   }
 };
 
+// The hardcoded text to be "recognized"
+const MIMICKED_SENTENCE = "HELLO WORLD HOW ARE YOU";
+
 const HandSignRecognition = () => {
   const [isActive, setIsActive] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(false);
   const [currentWord, setCurrentWord] = useState('');
   const [completedWords, setCompletedWords] = useState([]);
   const [currentSign, setCurrentSign] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('english');
-  const [debugInfo, setDebugInfo] = useState({ hands: 0, model: false }); 
-  
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const wsRef = useRef(null);
-  const streamRef = useRef(null);
-  const intervalRef = useRef(null);
-  const demoIntervalRef = useRef(null);
 
-  // You can change the sentence here for your demonstration
-  const demoSentence = "Hello world This is a demo sentence".split(' ');
-  const [demoIndex, setDemoIndex] = useState(0);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const simulationTimeoutRef = useRef(null); // Ref to manage the simulation timeouts
 
   const languages = [
     { code: 'english', name: 'English' },
     { code: 'hindi', name: 'हिंदी (Hindi)' },
     { code: 'spanish', name: 'Español' },
-    { code: 'french', name: 'Français' }
-  ]; 
+    { code: 'french', name: 'Français' },
+  ];
 
-  const signMapping = {
-    'A': 'https://i.imgur.com/e44s395.png', 'B': 'https://i.imgur.com/vH9J4Wk.png', 'C': 'https://i.imgur.com/v8tT9oJ.png', 'D': 'https://i.imgur.com/152Wk2M.png', 'E': 'https://i.imgur.com/x5Xh3sX.png', 'F': 'https://i.imgur.com/yD17r5i.png',
-    'G': 'https://i.imgur.com/d6d7L0J.png', 'H': 'https://i.imgur.com/yYqG83O.png', 'I': 'https://i.imgur.com/Fw8zXn2.png', 'J': 'https://i.imgur.com/cE0y3nJ.png', 'K': 'https://i.imgur.com/Y16gP2c.png', 'L': 'https://i.imgur.com/T0H4F4I.png',
-    'M': 'https://i.imgur.com/y1v2gXW.png', 'N': 'https://i.imgur.com/vU4dM6G.png', 'O': 'https://i.imgur.com/yG8y6cO.png', 'P': 'https://i.imgur.com/R3S0q1G.png', 'Q': 'https://i.imgur.com/B9M5G6D.png', 'R': 'https://i.imgur.com/Uo2wD3f.png',
-    'S': 'https://i.imgur.com/F01gI62.png', 'T': 'https://i.imgur.com/r00jR2R.png', 'U': 'https://i.imgur.com/R8iGzXz.png', 'V': 'https://i.imgur.com/L7r0YmN.png', 'W': 'https://i.imgur.com/s6n6R6b.png', 'X': 'https://i.imgur.com/J8n6f8C.png',
-    'Y': 'https://i.imgur.com/M5G91nB.png', 'Z': 'https://i.imgur.com/w4M0bJd.png'
-  };
-
-  const connectWebSocket = useCallback(() => {
-    if (wsRef.current) wsRef.current.close();
-    
-    try {
-      wsRef.current = new WebSocket('ws://localhost:8000/ws');
-      
-      wsRef.current.onopen = () => {
-        setIsConnected(true);
-        console.log('✅ WebSocket connected successfully'); 
-      };
-      
-      // The onmessage handler now ignores data if in demo mode
-      wsRef.current.onmessage = (event) => {
-        if (isDemoMode) {
-          // Do nothing, we are in demo mode
-          return;
-        }
-
-        const data = JSON.parse(event.data);
-        console.log('📨 Received data:', data); 
-        
-        if (data.type === 'processing') {
-          setCurrentSign(data.current_sign || '');
-          setCurrentWord(data.current_word || ''); 
-          if (data.debug) {
-            setDebugInfo({ hands: data.debug.hands_detected, model: data.debug.model_loaded }); 
-          }
-        } else if (data.type === 'word_completed') {
-          // Add the completed word to the list
-          setCompletedWords(prev => [...prev, data.word]);
-          // Clear the current word to begin a new one
-          setCurrentWord('');
-          setCurrentSign(''); 
-          console.log(`✅ Word completed: ${data.word}`); 
-        } else if (data.type === 'error') {
-          console.error('❌ Backend error:', data.message); 
-        }
-      };
-      
-      wsRef.current.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-        setIsConnected(false); 
-      };
-      
-      wsRef.current.onclose = (event) => {
-        setIsConnected(false);
-        console.log('🔌 WebSocket disconnected:', event.code, event.reason); 
-      };
-    } catch (error) {
-      console.error('❌ Failed to create WebSocket connection:', error);
-      setIsConnected(false); 
-    }
-  }, [isDemoMode]);
-
+  // Starts the camera feed to display video, but does not send frames
   const startCamera = async () => {
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
       if (videoRef.current) {
         videoRef.current.srcObject = streamRef.current;
-        await videoRef.current.play(); 
+        await videoRef.current.play();
       }
-      intervalRef.current = setInterval(captureAndSendFrame, 200); 
     } catch (error) {
       console.error('Error accessing camera:', error);
-      // We are not using an alert since it is not allowed in the iframe
-      const errorMessage = 'Could not access camera. Please ensure camera permissions are granted.';
-      console.log(errorMessage);
+      alert('Could not access camera. Please ensure camera permissions are granted.');
     }
   };
 
+  // Stops the camera feed
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null; 
-    }
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null; 
-    }
-    if (demoIntervalRef.current) {
-      clearInterval(demoIntervalRef.current);
-      demoIntervalRef.current = null;
+      streamRef.current = null;
     }
     if (videoRef.current) {
-      videoRef.current.srcObject = null; 
+      videoRef.current.srcObject = null;
     }
   };
 
-  const captureAndSendFrame = () => {
-    if (!videoRef.current || !canvasRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return; 
+  // This function runs the text simulation
+  const runTextSimulation = useCallback(() => {
+    // First, clear any previous state
+    setCompletedWords([]);
+    setCurrentWord('');
+    setCurrentSign('');
 
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
-    if (video.videoWidth === 0) return; 
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-    const dataURL = canvas.toDataURL('image/jpeg', 0.8); 
-    
-    wsRef.current.send(JSON.stringify({ type: 'frame', data: dataURL })); 
-  };
+    const words = MIMICKED_SENTENCE.split(' ');
+    let wordIndex = 0;
 
+    const processWord = () => {
+      // Stop if we've processed all words
+      if (wordIndex >= words.length) {
+        setIsActive(false); // End the simulation
+        stopCamera();
+        return;
+      }
+
+      const currentWordToProcess = words[wordIndex];
+      let charIndex = 0;
+
+      const processCharacter = () => {
+        if (charIndex < currentWordToProcess.length) {
+          const char = currentWordToProcess[charIndex];
+          setCurrentSign(char);
+          setCurrentWord(prev => prev + char);
+          
+          charIndex++;
+          // Schedule the next character after 1.5 seconds
+          simulationTimeoutRef.current = setTimeout(processCharacter, 1500);
+        } else {
+          // Word is complete
+          setCompletedWords(prev => [...prev, currentWordToProcess]);
+          setCurrentWord('');
+          setCurrentSign('');
+          
+          wordIndex++;
+          // Schedule the next word after 2 seconds
+          simulationTimeoutRef.current = setTimeout(processWord, 2000);
+        }
+      };
+      
+      processCharacter(); // Start processing characters for the current word
+    };
+    
+    processWord(); // Start processing the first word
+  }, []);
+
+  // Stops the text simulation by clearing any scheduled actions
+  const stopTextSimulation = useCallback(() => {
+    clearTimeout(simulationTimeoutRef.current);
+  }, []);
+
+
+  // Main toggle to start/stop the camera and simulation
   const handleToggle = useCallback(() => {
     if (isActive) {
       stopCamera();
+      stopTextSimulation();
       setIsActive(false);
-      setIsDemoMode(false);
     } else {
-      setIsActive(true);
-      setCompletedWords([]);
-      setCurrentWord('');
-      setCurrentSign('');
-      setIsDemoMode(true);
-    }
-  }, [isActive]); 
-
-  useEffect(() => {
-    if (isActive) {
-      connectWebSocket();
       startCamera();
-      
-      // Async function to handle the timed character and word display
-      const processSentence = async () => {
-        // Delay for the first character to not print instantaneously
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        for (const word of demoSentence) {
-          // Clear current word and build character by character
-          setCurrentWord('');
-          for (const char of word.split('')) {
-            setCurrentWord(prev => prev + char);
-            // Set a random sign for each character
-            const signs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-            setCurrentSign(signs[Math.floor(Math.random() * signs.length)]);
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-          // Add the completed word
-          setCompletedWords(prev => [...prev, word]);
-          setCurrentWord('');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      };
-
-      processSentence();
-    } else {
-      // Clear all timers and stop streams
-      stopCamera();
-      if (wsRef.current) wsRef.current.close();
-      if (demoIntervalRef.current) clearInterval(demoIntervalRef.current);
+      runTextSimulation();
+      setIsActive(true);
     }
+  }, [isActive, runTextSimulation, stopTextSimulation]);
 
-    return () => {
-      stopCamera();
-      if (wsRef.current) wsRef.current.close();
-      if (demoIntervalRef.current) clearInterval(demoIntervalRef.current);
-    };
-  }, [isActive, connectWebSocket, demoSentence]); 
-
-  const handleLanguageChange = useCallback(async (language) => {
-    try {
-      const response = await fetch('http://localhost:8000/set_language', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language }),
-      });
-      if (response.ok) setSelectedLanguage(language); 
-    } catch (error) {
-      console.error('Error changing language:', error); 
-    }
-  }, []);
-
+  // Clears the text and stops the simulation
   const handleClear = useCallback(() => {
     setCompletedWords([]);
     setCurrentWord('');
     setCurrentSign('');
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'reset' }));
+    if (isActive) {
+      stopTextSimulation();
+      stopCamera();
+      setIsActive(false);
     }
-    // Also clear the demo interval if it's running
-    if (demoIntervalRef.current) {
-        clearInterval(demoIntervalRef.current);
-    }
-  }, []); 
+  }, [isActive, stopTextSimulation]);
 
   const handleSpeakSentence = useCallback(() => {
     const fullSentence = completedWords.join(' ');
@@ -529,23 +422,28 @@ const HandSignRecognition = () => {
       textToSpeech(fullSentence, selectedLanguage);
     }
   }, [completedWords, selectedLanguage]);
+  
+  // Cleanup effect to stop everything when the component unmounts
+  useEffect(() => {
+    return () => {
+      stopCamera();
+      stopTextSimulation();
+    };
+  }, [stopTextSimulation]);
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-       <header className="bg-white shadow-md">
+      <header className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800">Hand Sign Recognition</h1>
           <div className="flex items-center space-x-4 mt-2 md:mt-0">
             <select
               value={selectedLanguage}
-              onChange={(e) => handleLanguageChange(e.target.value)}
+              onChange={(e) => setSelectedLanguage(e.target.value)}
               className="px-3 py-1 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {languages.map(lang => <option key={lang.code} value={lang.code}>{lang.name}</option>)} 
+              {languages.map(lang => <option key={lang.code} value={lang.code}>{lang.name}</option>)}
             </select>
-            <span className={`text-sm font-medium ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
-              {isConnected ? 'Connected' : 'Disconnected'} 
-            </span>
           </div>
         </div>
       </header>
@@ -553,32 +451,25 @@ const HandSignRecognition = () => {
       <main className="max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-lg">
           <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
-            <video ref={videoRef} className="w-full h-full" playsInline muted /> 
-            <canvas ref={canvasRef} className="hidden" />
-            {!isActive && <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white font-semibold">Camera is off</div>} 
-            {isActive && currentSign && <div className="absolute top-2 right-2 bg-blue-500 text-white px-3 py-1 rounded-full text-lg font-bold">{currentSign}</div>} 
+            <video ref={videoRef} className="w-full h-full" playsInline muted />
+            {!isActive && <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white font-semibold">Camera is off</div>}
+            {isActive && currentSign && <div className="absolute top-2 right-2 bg-blue-500 text-white px-3 py-1 rounded-full text-lg font-bold">{currentSign}</div>}
           </div>
-          <div className="mt-4 flex justify-center">
+          <div className="mt-4 flex flex-col md:flex-row justify-center space-y-2 md:space-y-0 md:space-x-4">
             <button
               onClick={handleToggle}
-              disabled={!isConnected}
-              className={`px-6 py-2 rounded-lg text-white font-semibold transform transition-transform duration-200 hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed
+              className={`px-6 py-2 rounded-lg text-white font-semibold transform transition-transform duration-200 hover:scale-105
                           ${isActive ? 'bg-red-500' : 'bg-green-500'}`}
             >
-              {isActive ? <><Pause className="inline mr-2" size={20}/>Stop</> : <><Play className="inline mr-2" size={20}/>Start Live</>} 
+              {isActive ? <><Pause className="inline mr-2" size={20}/>Stop</> : <><Play className="inline mr-2" size={20}/>Start</>}
             </button>
-          </div>
-          
-          <div className="mt-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">ASL Character Mapping</h2>
-            <div className="grid grid-cols-5 gap-4">
-              {Object.entries(signMapping).map(([char, imageUrl]) => (
-                <div key={char} className="flex flex-col items-center p-2 bg-gray-100 rounded-md">
-                  <img src={imageUrl} alt={`ASL sign for ${char}`} className="w-16 h-16 object-contain" />
-                  <span className="mt-1 font-semibold text-gray-700">{char}</span>
-                </div>
-              ))}
-            </div>
+            <button
+              onClick={handleSpeakSentence}
+              disabled={completedWords.length === 0}
+              className="px-6 py-2 rounded-lg bg-blue-500 text-white font-semibold transform transition-transform duration-200 hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              <Volume2 className="inline mr-2" size={20}/>Speak Sentence
+            </button>
           </div>
         </div>
 
@@ -594,15 +485,6 @@ const HandSignRecognition = () => {
               {completedWords.map((word, index) => <span key={index}>{word}{' '}</span>)}
               <span className="text-blue-500 font-semibold">{currentWord || (isActive ? '...' : '')}</span>
             </div>
-          </div>
-          <div className="mt-4 flex justify-center">
-            <button
-              onClick={handleSpeakSentence}
-              disabled={completedWords.length === 0}
-              className="px-6 py-2 rounded-lg bg-blue-500 text-white font-semibold transform transition-transform duration-200 hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              <Volume2 className="inline mr-2" size={20}/>Speak Sentence
-            </button>
           </div>
         </div>
       </main>
