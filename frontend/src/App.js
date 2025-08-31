@@ -444,25 +444,32 @@ const HandSignRecognition = () => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         await startCamera();
         setIsActive(true);
-        // Start the demo when "Start Live" is pressed
         setIsDemoMode(true);
         setCompletedWords([]);
         setCurrentWord('');
         setCurrentSign('');
         setDemoIndex(0);
 
-        let currentWordIndex = 0;
-        demoIntervalRef.current = setInterval(() => {
-          if (currentWordIndex < demoSentence.length) {
-            const nextWord = demoSentence[currentWordIndex];
-            setCompletedWords(prev => [...prev, nextWord]);
+        // Async function to handle the timed character and word display
+        const processSentence = async () => {
+          for (const word of demoSentence) {
+            // Clear current word and build character by character
             setCurrentWord('');
-            setDemoIndex(currentWordIndex + 1);
-            currentWordIndex++;
-          } else {
-            clearInterval(demoIntervalRef.current);
+            for (const char of word.split('')) {
+              setCurrentWord(prev => prev + char);
+              // Set a random sign for each character
+              const signs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+              setCurrentSign(signs[Math.floor(Math.random() * signs.length)]);
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            // Add the completed word
+            setCompletedWords(prev => [...prev, word]);
+            setCurrentWord('');
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
-        }, 2000); // 2-second interval for each word
+        };
+
+        processSentence();
       } else {
         const errorMessage = 'Could not connect to server.';
         console.log(errorMessage);
