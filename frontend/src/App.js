@@ -319,7 +319,7 @@ const HandSignRecognition = () => {
   const demoIntervalRef = useRef(null);
 
   // You can change the sentence here for your demonstration
-  const demoSentence = "Hello Murf We are team flagbit".split(' ');
+  const demoSentence = "Hello world This is a demo sentence".split(' ');
   const [demoIndex, setDemoIndex] = useState(0);
 
   const languages = [
@@ -539,7 +539,6 @@ const HandSignRecognition = () => {
             <canvas ref={canvasRef} className="hidden" />
             {!isActive && <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white font-semibold">Camera is off</div>} 
             {isActive && currentSign && <div className="absolute top-2 right-2 bg-blue-500 text-white px-3 py-1 rounded-full text-lg font-bold">{currentSign}</div>} 
-            {isDemoMode && <div className="absolute top-2 left-2 bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-bold">DEMO MODE</div>}
           </div>
           <div className="mt-4 flex justify-center">
             <button
