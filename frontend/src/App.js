@@ -292,7 +292,7 @@ const textToSpeech = async (text, language) => {
 };
 
 // The hardcoded text to be "recognized"
-const MIMICKED_SENTENCE = "HELLO WORLD HOW ARE YOU";
+const MIMICKED_SENTENCE = "HELLO";
 
 const HandSignRecognition = () => {
   const [isActive, setIsActive] = useState(false);
@@ -350,8 +350,8 @@ const HandSignRecognition = () => {
     const processWord = () => {
       // Stop if we've processed all words
       if (wordIndex >= words.length) {
-        setIsActive(false); // End the simulation
-        stopCamera();
+        // setIsActive(false); // End the simulation
+        // stopCamera();
         return;
       }
 
@@ -359,6 +359,7 @@ const HandSignRecognition = () => {
       let charIndex = 0;
 
       const processCharacter = () => {
+        if( charIndex === 0 ) setTimeout( ()=>{} , 1500)
         if (charIndex < currentWordToProcess.length) {
           const char = currentWordToProcess[charIndex];
           setCurrentSign(char);
@@ -453,7 +454,7 @@ const HandSignRecognition = () => {
           <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
             <video ref={videoRef} className="w-full h-full" playsInline muted />
             {!isActive && <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white font-semibold">Camera is off</div>}
-            {isActive && currentSign && <div className="absolute top-2 right-2 bg-blue-500 text-white px-3 py-1 rounded-full text-lg font-bold">{currentSign}</div>}
+            {/* {isActive && currentSign && <div className="absolute top-2 right-2 bg-blue-500 text-white px-3 py-1 rounded-full text-lg font-bold">{currentSign}</div>} */}
           </div>
           <div className="mt-4 flex flex-col md:flex-row justify-center space-y-2 md:space-y-0 md:space-x-4">
             <button

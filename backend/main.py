@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from huggingface_hub import snapshot_download
 from dotenv import load_dotenv
 from murf import Murf
+import string
 
 # Load environment variables from .env file
 load_dotenv()
@@ -244,6 +245,7 @@ async def generate_speech(request: SpeechRequest):
         murf_client = Murf(api_key=MUR_API_KEY)
         
         # Step 1: Translate the text
+        
         print(f"🔄 Translating '{request.text}' to {voice_info['lang_code']}...")
         translation_result = murf_client.text.translate(
             texts=[request.text], # Only translate the user's text
